@@ -4,7 +4,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 
 class ApiService {
   // Change this to your backend URL
-  static const String baseUrl = 'http://10.0.2.2:5000/api';
+  static const String baseUrl = 'https://subhchintak-api.onrender.com/api';
   static const _storage = FlutterSecureStorage();
 
   static Future<String?> getToken() async {
