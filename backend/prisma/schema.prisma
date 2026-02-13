@@ -20,6 +20,7 @@ model User {
   updatedAt     DateTime @updatedAt
 
   qrCodes           QRCode[]
+  tagDesigns        TagDesign[]
   emergencyContacts EmergencyContact[]
   orders            Order[]
   chatSessionsOwner ChatSession[]      @relation("OwnerSessions")
@@ -47,6 +48,7 @@ enum QRPurpose {
   CUSTOM
 }
 
+// One QR per user. Master QR linked to owner's contact.
 model QRCode {
   id             String    @id @default(uuid())
   userId         String
@@ -64,6 +66,7 @@ model QRCode {
   updatedAt      DateTime  @updatedAt
 
   user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tagDesigns   TagDesign[]
   scanLogs     ScanLog[]
   chatSessions ChatSession[]
   callLogs     CallLog[]
@@ -72,6 +75,26 @@ model QRCode {
   @@index([userId])
   @@index([uniqueCode])
   @@map("qr_codes")
+}
+
+// Multiple visual sticker designs for the same QR
+model TagDesign {
+  id             String    @id @default(uuid())
+  userId         String
+  qrCodeId       String
+  purpose        QRPurpose @default(CUSTOM)
+  customPurpose  String?
+  templateType   String?
+  customization  Json?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  qrCode QRCode @relation(fields: [qrCodeId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([qrCodeId])
+  @@map("tag_designs")
 }
 
 model ScanLog {
@@ -190,6 +213,7 @@ enum OrderStatus {
 enum OrderType {
   PDF_DOWNLOAD
   PHYSICAL_STICKER
+  YEARLY_SUBSCRIPTION
 }
 
 model Order {
