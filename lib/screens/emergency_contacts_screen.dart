@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 import 'package:animate_do/animate_do.dart';
 import 'package:flutter_contacts/flutter_contacts.dart';
 import 'package:permission_handler/permission_handler.dart';
 import '../theme/app_theme.dart';
+import '../providers/emergency_contacts_provider.dart';
 import '../widgets/app_shell.dart';
 
 class EmergencyContactsScreen extends StatefulWidget {
@@ -15,8 +17,16 @@ class EmergencyContactsScreen extends StatefulWidget {
 }
 
 class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
-  final List<Map<String, String>> _contacts = [];
   bool _isSyncing = false;
+
+  @override
+  void initState() {
+    super.initState();
+    // Load saved contacts from server on screen open
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<EmergencyContactsProvider>().loadContacts();
+    });
+  }
 
   // ========== MANUAL ADD ==========
   void _showAddContactDialog() {
@@ -68,7 +78,6 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                       prefixIcon: Icon(Icons.phone_outlined),
                       prefixText: '+91 ')),
               const SizedBox(height: 14),
-              // Relation dropdown
               DropdownButtonFormField<String>(
                 value: selectedRelation,
                 decoration: const InputDecoration(
@@ -86,19 +95,45 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                 width: double.infinity,
                 height: 52,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (nameC.text.isNotEmpty && phoneC.text.isNotEmpty) {
-                      setState(() {
-                        _contacts.add({
-                          'name': nameC.text,
-                          'phone': phoneC.text.startsWith('+')
-                              ? phoneC.text
-                              : '+91 ${phoneC.text}',
-                          'relation': selectedRelation,
-                          'priority': '${_contacts.length + 1}',
-                        });
-                      });
-                      Navigator.pop(ctx);
+                  onPressed: () async {
+                    if (nameC.text.isEmpty || phoneC.text.isEmpty) return;
+
+                    final phone = phoneC.text.startsWith('+')
+                        ? phoneC.text
+                        : '+91 ${phoneC.text}';
+
+                    final provider =
+                        context.read<EmergencyContactsProvider>();
+                    final success = await provider.addContact(
+                      name: nameC.text,
+                      phone: phone,
+                      relation: selectedRelation,
+                    );
+
+                    if (mounted) Navigator.pop(ctx);
+
+                    if (success && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Row(children: const [
+                          Icon(Icons.check_circle_rounded,
+                              color: Colors.white, size: 20),
+                          SizedBox(width: 10),
+                          Text('Contact added successfully'),
+                        ]),
+                        backgroundColor: AppColors.success,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ));
+                    } else if (!success && mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                        content: Text(
+                            provider.error ?? 'Failed to add contact'),
+                        backgroundColor: AppColors.danger,
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ));
                     }
                   },
                   child: Text('Add Contact',
@@ -117,7 +152,6 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
   Future<void> _syncContactsFromDevice() async {
     setState(() => _isSyncing = true);
 
-    // Request permission
     final status = await Permission.contacts.request();
     if (!status.isGranted) {
       setState(() => _isSyncing = false);
@@ -132,7 +166,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                   color: AppColors.warning, size: 28),
               const SizedBox(width: 10),
               Text('Permission Required',
-                  style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w700)),
+                  style:
+                      GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w700)),
             ]),
             content: Text(
                 'SHUBHCHINTAK needs access to your contacts to sync emergency contacts. Please allow access in Settings.',
@@ -154,14 +189,12 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
       return;
     }
 
-    // Fetch contacts
     try {
       final contacts = await FlutterContacts.getContacts(
         withProperties: true,
         withPhoto: false,
       );
 
-      // Filter contacts that have phone numbers
       final List<Map<String, String>> deviceContacts = [];
       for (final contact in contacts) {
         if (contact.phones.isNotEmpty) {
@@ -187,8 +220,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
 
       if (deviceContacts.isEmpty) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('No contacts with phone numbers found.')));
+          ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('No contacts with phone numbers found.')));
         }
         return;
       }
@@ -208,14 +241,14 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
     final searchController = TextEditingController();
     List<Map<String, String>> filteredContacts = List.from(deviceContacts);
     final Set<int> selectedIndices = {};
-
-    // Relation for each selected contact
     final Map<int, String> contactRelations = {};
 
     final relations = [
       'Mother', 'Father', 'Spouse', 'Brother', 'Sister',
       'Son', 'Daughter', 'Friend', 'Colleague', 'Neighbor', 'Other'
     ];
+
+    final provider = context.read<EmergencyContactsProvider>();
 
     showModalBottomSheet(
       context: context,
@@ -250,8 +283,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                     child: Row(
                       children: [
                         Container(
-                          width: 44,
-                          height: 44,
+                          width: 44, height: 44,
                           decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(12),
                               color: AppColors.success.withOpacity(0.1)),
@@ -336,7 +368,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                   ),
                   const SizedBox(height: 8),
 
-                  // Selected count bar
+                  // Selected count
                   if (selectedIndices.isNotEmpty)
                     Container(
                       margin: const EdgeInsets.symmetric(
@@ -351,7 +383,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                       ),
                       child: Row(
                         children: [
-                          Icon(Icons.check_circle_rounded,
+                          const Icon(Icons.check_circle_rounded,
                               color: AppColors.accent, size: 20),
                           const SizedBox(width: 10),
                           Text(
@@ -392,8 +424,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                                   deviceContacts.indexOf(contact);
                               final isSelected =
                                   selectedIndices.contains(originalIndex);
-                              final isAlreadyAdded = _contacts.any(
-                                  (c) => c['phone'] == contact['phone']);
+                              final isAlreadyAdded =
+                                  provider.hasPhone(contact['phone']!);
                               final assignedRelation =
                                   contactRelations[originalIndex];
 
@@ -407,8 +439,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                                   borderRadius: BorderRadius.circular(12),
                                   border: isSelected
                                       ? Border.all(
-                                          color:
-                                              AppColors.accent.withOpacity(0.2))
+                                          color: AppColors.accent
+                                              .withOpacity(0.2))
                                       : null,
                                 ),
                                 child: Column(
@@ -452,7 +484,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                                       subtitle: Text(
                                         contact['phone']!,
                                         style: GoogleFonts.poppins(
-                                            fontSize: 12, color: Colors.grey),
+                                            fontSize: 12,
+                                            color: Colors.grey),
                                       ),
                                       trailing: isAlreadyAdded
                                           ? Container(
@@ -464,8 +497,9 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                                                   color: AppColors.success
                                                       .withOpacity(0.1),
                                                   borderRadius:
-                                                      BorderRadius.circular(8)),
-                                              child: Text('Already Added',
+                                                      BorderRadius.circular(
+                                                          8)),
+                                              child: Text('Added',
                                                   style: GoogleFonts.poppins(
                                                       fontSize: 11,
                                                       fontWeight:
@@ -476,9 +510,11 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                                           : Checkbox(
                                               value: isSelected,
                                               activeColor: AppColors.accent,
-                                              shape: RoundedRectangleBorder(
-                                                  borderRadius:
-                                                      BorderRadius.circular(4)),
+                                              shape:
+                                                  RoundedRectangleBorder(
+                                                      borderRadius:
+                                                          BorderRadius
+                                                              .circular(4)),
                                               onChanged: (val) {
                                                 setSheetState(() {
                                                   if (val == true) {
@@ -488,10 +524,10 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                                                             originalIndex] =
                                                         'Friend';
                                                   } else {
-                                                    selectedIndices
-                                                        .remove(originalIndex);
-                                                    contactRelations
-                                                        .remove(originalIndex);
+                                                    selectedIndices.remove(
+                                                        originalIndex);
+                                                    contactRelations.remove(
+                                                        originalIndex);
                                                   }
                                                 });
                                               },
@@ -500,8 +536,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                                           ? null
                                           : () {
                                               setSheetState(() {
-                                                if (selectedIndices
-                                                    .contains(originalIndex)) {
+                                                if (selectedIndices.contains(
+                                                    originalIndex)) {
                                                   selectedIndices
                                                       .remove(originalIndex);
                                                   contactRelations
@@ -510,13 +546,13 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                                                   selectedIndices
                                                       .add(originalIndex);
                                                   contactRelations[
-                                                      originalIndex] = 'Friend';
+                                                          originalIndex] =
+                                                      'Friend';
                                                 }
                                               });
                                             },
                                     ),
-
-                                    // Relation picker (shows when selected)
+                                    // Relation picker when selected
                                     if (isSelected)
                                       Padding(
                                         padding: const EdgeInsets.fromLTRB(
@@ -529,23 +565,28 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                                                     color: Colors.grey)),
                                             const SizedBox(width: 8),
                                             Expanded(
-                                              child: SingleChildScrollView(
+                                              child:
+                                                  SingleChildScrollView(
                                                 scrollDirection:
                                                     Axis.horizontal,
                                                 child: Row(
                                                   children:
                                                       relations.map((r) {
                                                     final isChosen =
-                                                        assignedRelation == r;
+                                                        assignedRelation ==
+                                                            r;
                                                     return Padding(
                                                       padding:
-                                                          const EdgeInsets.only(
+                                                          const EdgeInsets
+                                                              .only(
                                                               right: 6),
-                                                      child: GestureDetector(
+                                                      child:
+                                                          GestureDetector(
                                                         onTap: () {
                                                           setSheetState(() {
                                                             contactRelations[
-                                                                originalIndex] = r;
+                                                                    originalIndex] =
+                                                                r;
                                                           });
                                                         },
                                                         child: Container(
@@ -554,7 +595,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                                                                   .symmetric(
                                                                   horizontal:
                                                                       12,
-                                                                  vertical: 6),
+                                                                  vertical:
+                                                                      6),
                                                           decoration:
                                                               BoxDecoration(
                                                             color: isChosen
@@ -568,7 +610,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                                                                 BorderRadius
                                                                     .circular(
                                                                         20),
-                                                            border: Border.all(
+                                                            border:
+                                                                Border.all(
                                                               color: isChosen
                                                                   ? AppColors
                                                                       .accent
@@ -587,7 +630,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                                                                   FontWeight
                                                                       .w600,
                                                               color: isChosen
-                                                                  ? Colors.white
+                                                                  ? Colors
+                                                                      .white
                                                                   : AppColors
                                                                       .accent,
                                                             ),
@@ -609,7 +653,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                           ),
                   ),
 
-                  // Bottom action button
+                  // Bottom button — BULK SAVE
                   Container(
                     padding: const EdgeInsets.fromLTRB(20, 12, 20, 28),
                     decoration: BoxDecoration(
@@ -626,42 +670,49 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                       child: ElevatedButton(
                         onPressed: selectedIndices.isEmpty
                             ? null
-                            : () {
-                                setState(() {
-                                  for (final idx in selectedIndices) {
-                                    final contact = deviceContacts[idx];
-                                    if (!_contacts.any((c) =>
-                                        c['phone'] == contact['phone'])) {
-                                      _contacts.add({
-                                        'name': contact['name']!,
-                                        'phone': contact['phone']!,
-                                        'relation':
-                                            contactRelations[idx] ?? 'Friend',
-                                        'priority':
-                                            '${_contacts.length + 1}',
-                                      });
-                                    }
-                                  }
-                                });
+                            : () async {
+                                // Build the contacts list for bulk add
+                                final contactsToAdd = <Map<String, String>>[];
+                                for (final idx in selectedIndices) {
+                                  final contact = deviceContacts[idx];
+                                  contactsToAdd.add({
+                                    'name': contact['name']!,
+                                    'phone': contact['phone']!,
+                                    'relation':
+                                        contactRelations[idx] ?? 'Friend',
+                                  });
+                                }
+
                                 Navigator.pop(ctx);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
+
+                                // Bulk add via provider → API
+                                final addedCount = await provider
+                                    .bulkAddContacts(contactsToAdd);
+
+                                if (mounted) {
+                                  ScaffoldMessenger.of(context)
+                                      .showSnackBar(SnackBar(
                                     content: Row(
                                       children: [
-                                        const Icon(Icons.check_circle_rounded,
-                                            color: Colors.white, size: 20),
+                                        const Icon(
+                                            Icons.check_circle_rounded,
+                                            color: Colors.white,
+                                            size: 20),
                                         const SizedBox(width: 10),
-                                        Text(
-                                            '${selectedIndices.length} contact(s) added as emergency contacts'),
+                                        Text(addedCount > 0
+                                            ? '$addedCount contact(s) saved as emergency contacts'
+                                            : 'All selected contacts were already added'),
                                       ],
                                     ),
-                                    backgroundColor: AppColors.success,
+                                    backgroundColor: addedCount > 0
+                                        ? AppColors.success
+                                        : AppColors.info,
                                     behavior: SnackBarBehavior.floating,
                                     shape: RoundedRectangleBorder(
                                         borderRadius:
                                             BorderRadius.circular(12)),
-                                  ),
-                                );
+                                  ));
+                                }
                               },
                         style: ElevatedButton.styleFrom(
                           backgroundColor: selectedIndices.isEmpty
@@ -683,7 +734,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                             Text(
                               selectedIndices.isEmpty
                                   ? 'Select contacts to add'
-                                  : 'Add ${selectedIndices.length} Contact(s)',
+                                  : 'Save ${selectedIndices.length} Contact(s)',
                               style: GoogleFonts.poppins(
                                   fontSize: 16,
                                   fontWeight: FontWeight.w600,
@@ -705,6 +756,9 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
 
   // ========== EDIT RELATION ==========
   void _editRelation(int index) {
+    final provider = context.read<EmergencyContactsProvider>();
+    final contact = provider.contacts[index];
+
     final relations = [
       'Mother', 'Father', 'Spouse', 'Brother', 'Sister',
       'Son', 'Daughter', 'Friend', 'Colleague', 'Neighbor', 'Other'
@@ -729,7 +783,7 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                           color: Colors.grey[300],
                           borderRadius: BorderRadius.circular(2)))),
               const SizedBox(height: 16),
-              Text('Set Relation for ${_contacts[index]['name']}',
+              Text('Set Relation for ${contact['name']}',
                   style: GoogleFonts.spaceGrotesk(
                       fontSize: 18, fontWeight: FontWeight.w700)),
               const SizedBox(height: 16),
@@ -737,11 +791,11 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                 spacing: 8,
                 runSpacing: 8,
                 children: relations.map((r) {
-                  final isSelected = _contacts[index]['relation'] == r;
+                  final isSelected = contact['relation'] == r;
                   return GestureDetector(
                     onTap: () {
-                      setState(
-                          () => _contacts[index]['relation'] = r);
+                      provider.updateRelation(
+                          contact['id'] as String, r);
                       Navigator.pop(ctx);
                     },
                     child: Container(
@@ -763,7 +817,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                         style: GoogleFonts.poppins(
                           fontSize: 13,
                           fontWeight: FontWeight.w600,
-                          color: isSelected ? Colors.white : AppColors.accent,
+                          color:
+                              isSelected ? Colors.white : AppColors.accent,
                         ),
                       ),
                     ),
@@ -782,6 +837,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final provider = context.watch<EmergencyContactsProvider>();
+    final contacts = provider.contacts;
 
     return AppShell(
       currentIndex: 3,
@@ -815,7 +872,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                 decoration: BoxDecoration(
                   color: AppColors.info.withOpacity(0.08),
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.info.withOpacity(0.2)),
+                  border:
+                      Border.all(color: AppColors.info.withOpacity(0.2)),
                 ),
                 child: Row(
                   children: [
@@ -834,174 +892,190 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
             ),
             const SizedBox(height: 20),
 
-            // Contacts list
-            Expanded(
-              child: _contacts.isEmpty
-                  ? Center(
-                      child: FadeIn(
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Container(
-                              width: 80,
-                              height: 80,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: AppColors.accent.withOpacity(0.08),
-                              ),
-                              child: Icon(Icons.contacts_outlined,
-                                  size: 40,
-                                  color: isDark
-                                      ? AppColors.darkTextSecondary
-                                      : AppColors.lightTextSecondary),
-                            ),
-                            const SizedBox(height: 20),
-                            Text('No emergency contacts yet',
-                                style: GoogleFonts.poppins(
-                                    fontSize: 16,
-                                    fontWeight: FontWeight.w500,
-                                    color: isDark
-                                        ? AppColors.darkTextSecondary
-                                        : AppColors.lightTextSecondary)),
-                            const SizedBox(height: 8),
-                            Text(
-                                'Tap "Sync Contacts" to import from\nyour phone or add manually',
-                                style: GoogleFonts.poppins(
-                                    fontSize: 13,
-                                    color: isDark
-                                        ? AppColors.darkTextSecondary
-                                        : AppColors.lightTextSecondary),
-                                textAlign: TextAlign.center),
-                          ],
-                        ),
-                      ),
-                    )
-                  : ReorderableListView.builder(
-                      itemCount: _contacts.length,
-                      onReorder: (old, newIdx) {
-                        setState(() {
-                          if (newIdx > old) newIdx--;
-                          final item = _contacts.removeAt(old);
-                          _contacts.insert(newIdx, item);
-                          for (int i = 0; i < _contacts.length; i++) {
-                            _contacts[i]['priority'] = '${i + 1}';
-                          }
-                        });
-                      },
-                      itemBuilder: (context, index) {
-                        final c = _contacts[index];
-                        return FadeInUp(
-                          key: ValueKey('${c['phone']}_$index'),
-                          delay: Duration(milliseconds: 50 * index),
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
+            // Loading indicator
+            if (provider.isLoading && contacts.isEmpty)
+              const Expanded(
+                  child: Center(child: CircularProgressIndicator()))
+            // Empty state
+            else if (contacts.isEmpty)
+              Expanded(
+                child: Center(
+                  child: FadeIn(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 80, height: 80,
+                          decoration: BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AppColors.accent.withOpacity(0.08),
+                          ),
+                          child: Icon(Icons.contacts_outlined,
+                              size: 40,
                               color: isDark
-                                  ? AppColors.darkCard
-                                  : AppColors.lightCard,
-                              borderRadius: BorderRadius.circular(14),
-                              border: Border.all(
-                                  color: isDark
-                                      ? AppColors.darkDivider
-                                      : AppColors.lightDivider),
-                            ),
-                            child: Row(
-                              children: [
-                                // Priority number
-                                Container(
-                                  width: 40,
-                                  height: 40,
-                                  decoration: BoxDecoration(
-                                    borderRadius: BorderRadius.circular(12),
-                                    color: AppColors.accent.withOpacity(0.1),
-                                  ),
-                                  child: Center(
-                                    child: Text(c['priority']!,
-                                        style: GoogleFonts.spaceGrotesk(
-                                            fontSize: 18,
-                                            fontWeight: FontWeight.w700,
-                                            color: AppColors.accent)),
-                                  ),
+                                  ? AppColors.darkTextSecondary
+                                  : AppColors.lightTextSecondary),
+                        ),
+                        const SizedBox(height: 20),
+                        Text('No emergency contacts yet',
+                            style: GoogleFonts.poppins(
+                                fontSize: 16,
+                                fontWeight: FontWeight.w500,
+                                color: isDark
+                                    ? AppColors.darkTextSecondary
+                                    : AppColors.lightTextSecondary)),
+                        const SizedBox(height: 8),
+                        Text(
+                            'Tap "Sync Contacts" to import from\nyour phone or add manually',
+                            style: GoogleFonts.poppins(
+                                fontSize: 13,
+                                color: isDark
+                                    ? AppColors.darkTextSecondary
+                                    : AppColors.lightTextSecondary),
+                            textAlign: TextAlign.center),
+                      ],
+                    ),
+                  ),
+                ),
+              )
+            // Contacts list
+            else
+              Expanded(
+                child: RefreshIndicator(
+                  onRefresh: () => provider.loadContacts(),
+                  child: ReorderableListView.builder(
+                    itemCount: contacts.length,
+                    onReorder: (old, newIdx) =>
+                        provider.reorder(old, newIdx),
+                    itemBuilder: (context, index) {
+                      final c = contacts[index];
+                      return FadeInUp(
+                        key: ValueKey('${c['id']}_$index'),
+                        delay: Duration(milliseconds: 50 * index),
+                        child: Container(
+                          margin: const EdgeInsets.only(bottom: 12),
+                          padding: const EdgeInsets.all(14),
+                          decoration: BoxDecoration(
+                            color: isDark
+                                ? AppColors.darkCard
+                                : AppColors.lightCard,
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                                color: isDark
+                                    ? AppColors.darkDivider
+                                    : AppColors.lightDivider),
+                          ),
+                          child: Row(
+                            children: [
+                              // Priority number
+                              Container(
+                                width: 40, height: 40,
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  color:
+                                      AppColors.accent.withOpacity(0.1),
                                 ),
-                                const SizedBox(width: 12),
-                                // Name, phone, relation
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(c['name']!,
-                                          style: GoogleFonts.poppins(
-                                              fontSize: 15,
-                                              fontWeight: FontWeight.w600)),
-                                      const SizedBox(height: 2),
-                                      Text(c['phone']!,
-                                          style: GoogleFonts.poppins(
-                                              fontSize: 12,
-                                              color: isDark
-                                                  ? AppColors.darkTextSecondary
-                                                  : AppColors
-                                                      .lightTextSecondary)),
-                                      const SizedBox(height: 4),
-                                      // Relation chip (tap to edit)
-                                      GestureDetector(
-                                        onTap: () => _editRelation(index),
-                                        child: Container(
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 10, vertical: 3),
-                                          decoration: BoxDecoration(
-                                            color: AppColors.accent
-                                                .withOpacity(0.08),
-                                            borderRadius:
-                                                BorderRadius.circular(12),
-                                          ),
-                                          child: Row(
-                                            mainAxisSize: MainAxisSize.min,
-                                            children: [
-                                              Text(
-                                                c['relation']!.isEmpty
-                                                    ? 'Set relation'
-                                                    : c['relation']!,
-                                                style: GoogleFonts.poppins(
-                                                    fontSize: 11,
-                                                    fontWeight: FontWeight.w600,
-                                                    color: AppColors.accent),
-                                              ),
-                                              const SizedBox(width: 4),
-                                              Icon(Icons.edit_rounded,
-                                                  size: 12,
-                                                  color: AppColors.accent),
-                                            ],
-                                          ),
+                                child: Center(
+                                  child: Text(
+                                      c['priority_display'] ??
+                                          '${index + 1}',
+                                      style: GoogleFonts.spaceGrotesk(
+                                          fontSize: 18,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.accent)),
+                                ),
+                              ),
+                              const SizedBox(width: 12),
+                              // Name, phone, relation
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
+                                  children: [
+                                    Text(c['name'] ?? '',
+                                        style: GoogleFonts.poppins(
+                                            fontSize: 15,
+                                            fontWeight:
+                                                FontWeight.w600)),
+                                    const SizedBox(height: 2),
+                                    Text(c['phone'] ?? '',
+                                        style: GoogleFonts.poppins(
+                                            fontSize: 12,
+                                            color: isDark
+                                                ? AppColors
+                                                    .darkTextSecondary
+                                                : AppColors
+                                                    .lightTextSecondary)),
+                                    const SizedBox(height: 4),
+                                    GestureDetector(
+                                      onTap: () =>
+                                          _editRelation(index),
+                                      child: Container(
+                                        padding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 10,
+                                                vertical: 3),
+                                        decoration: BoxDecoration(
+                                          color: AppColors.accent
+                                              .withOpacity(0.08),
+                                          borderRadius:
+                                              BorderRadius.circular(12),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize:
+                                              MainAxisSize.min,
+                                          children: [
+                                            Text(
+                                              (c['relation'] ?? '')
+                                                      .isEmpty
+                                                  ? 'Set relation'
+                                                  : c['relation'],
+                                              style:
+                                                  GoogleFonts.poppins(
+                                                      fontSize: 11,
+                                                      fontWeight:
+                                                          FontWeight
+                                                              .w600,
+                                                      color: AppColors
+                                                          .accent),
+                                            ),
+                                            const SizedBox(width: 4),
+                                            const Icon(
+                                                Icons.edit_rounded,
+                                                size: 12,
+                                                color:
+                                                    AppColors.accent),
+                                          ],
                                         ),
                                       ),
-                                    ],
-                                  ),
+                                    ),
+                                  ],
                                 ),
-                                // Delete button
-                                IconButton(
-                                  icon: const Icon(
-                                      Icons.delete_outline_rounded,
-                                      color: AppColors.danger,
-                                      size: 22),
-                                  onPressed: () => setState(
-                                      () => _contacts.removeAt(index)),
-                                ),
-                                // Drag handle
-                                ReorderableDragStartListener(
-                                  index: index,
-                                  child: const Icon(
-                                      Icons.drag_handle_rounded,
-                                      color: Colors.grey),
-                                ),
-                              ],
-                            ),
+                              ),
+                              // Delete
+                              IconButton(
+                                icon: const Icon(
+                                    Icons.delete_outline_rounded,
+                                    color: AppColors.danger,
+                                    size: 22),
+                                onPressed: () =>
+                                    provider.deleteContact(index),
+                              ),
+                              // Drag handle
+                              ReorderableDragStartListener(
+                                index: index,
+                                child: const Icon(
+                                    Icons.drag_handle_rounded,
+                                    color: Colors.grey),
+                              ),
+                            ],
                           ),
-                        );
-                      },
-                    ),
-            ),
+                        ),
+                      );
+                    },
+                  ),
+                ),
+              ),
 
             // Bottom buttons
             const SizedBox(height: 8),
@@ -1011,13 +1085,14 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                   child: SizedBox(
                     height: 52,
                     child: OutlinedButton.icon(
-                      onPressed: _isSyncing ? null : _syncContactsFromDevice,
+                      onPressed:
+                          _isSyncing ? null : _syncContactsFromDevice,
                       icon: _isSyncing
                           ? const SizedBox(
                               width: 18,
                               height: 18,
-                              child:
-                                  CircularProgressIndicator(strokeWidth: 2))
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2))
                           : const Icon(Icons.sync_rounded, size: 20),
                       label: Text(
                         _isSyncing ? 'Syncing...' : 'Sync Contacts',
@@ -1036,7 +1111,8 @@ class _EmergencyContactsScreenState extends State<EmergencyContactsScreen> {
                       icon: const Icon(Icons.add_rounded, size: 20),
                       label: Text('Add Manual',
                           style: GoogleFonts.poppins(
-                              fontSize: 13, fontWeight: FontWeight.w600)),
+                              fontSize: 13,
+                              fontWeight: FontWeight.w600)),
                     ),
                   ),
                 ),

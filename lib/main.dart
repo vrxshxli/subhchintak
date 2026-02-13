@@ -7,6 +7,8 @@ import 'providers/theme_provider.dart';
 import 'providers/qr_provider.dart';
 import 'providers/chat_provider.dart';
 import 'providers/notification_provider.dart';
+import 'providers/language_provider.dart';
+import 'providers/emergency_contacts_provider.dart';
 import 'screens/splash_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/login_screen.dart';
@@ -25,6 +27,12 @@ import 'screens/profile_screen.dart';
 import 'screens/incoming_call_screen.dart';
 import 'screens/live_call_screen.dart';
 import 'screens/missed_call_screen.dart';
+import 'screens/edit_profile_screen.dart';
+import 'screens/payment_history_screen.dart';
+import 'screens/notification_settings_screen.dart';
+import 'screens/privacy_security_screen.dart';
+import 'screens/help_support_screen.dart';
+import 'screens/about_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
@@ -49,6 +57,8 @@ class ShubhchintakApp extends StatelessWidget {
         ChangeNotifierProvider(create: (_) => QRProvider()),
         ChangeNotifierProvider(create: (_) => ChatProvider()),
         ChangeNotifierProvider(create: (_) => NotificationProvider()),
+        ChangeNotifierProvider(create: (_) => LanguageProvider()),
+        ChangeNotifierProvider(create: (_) => EmergencyContactsProvider()),
       ],
       child: Consumer<ThemeProvider>(
         builder: (context, themeProvider, child) {
@@ -78,6 +88,12 @@ class ShubhchintakApp extends StatelessWidget {
               '/incoming-call': (context) => const IncomingCallScreen(),
               '/live-call': (context) => const LiveCallScreen(),
               '/missed-call': (context) => const MissedCallScreen(),
+              '/edit-profile': (context) => const EditProfileScreen(),
+              '/payment-history': (context) => const PaymentHistoryScreen(),
+              '/notification-settings': (context) => const NotificationSettingsScreen(),
+              '/privacy-security': (context) => const PrivacySecurityScreen(),
+              '/help-support': (context) => const HelpSupportScreen(),
+              '/about': (context) => const AboutScreen(),
             },
           );
         },

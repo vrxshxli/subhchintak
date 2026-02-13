@@ -32,7 +32,8 @@ class ApiService {
     return headers;
   }
 
-  // AUTH
+  // ─── AUTH ───────────────────────────────────────────────────────
+
   static Future<Map<String, dynamic>> register({
     required String name,
     required String email,
@@ -83,7 +84,8 @@ class ApiService {
     return jsonDecode(response.body);
   }
 
-  // QR CODES
+  // ─── QR CODES ──────────────────────────────────────────────────
+
   static Future<Map<String, dynamic>> createQR({
     required String purpose,
     required String templateType,
@@ -121,7 +123,8 @@ class ApiService {
     return jsonDecode(response.body);
   }
 
-  // EMERGENCY CONTACTS
+  // ─── EMERGENCY CONTACTS ────────────────────────────────────────
+
   static Future<Map<String, dynamic>> getEmergencyContacts() async {
     final response = await http.get(
       Uri.parse('$baseUrl/emergency/contacts'),
@@ -149,6 +152,51 @@ class ApiService {
     return jsonDecode(response.body);
   }
 
+  /// Bulk add contacts synced from device
+  static Future<Map<String, dynamic>> bulkAddEmergencyContacts({
+    required List<Map<String, String>> contacts,
+  }) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/emergency/contacts/bulk'),
+      headers: await _headers(),
+      body: jsonEncode({'contacts': contacts}),
+    );
+    return jsonDecode(response.body);
+  }
+
+  static Future<Map<String, dynamic>> updateEmergencyContact({
+    required String id,
+    String? name,
+    String? phone,
+    String? relation,
+    int? priority,
+  }) async {
+    final body = <String, dynamic>{};
+    if (name != null) body['name'] = name;
+    if (phone != null) body['phone'] = phone;
+    if (relation != null) body['relation'] = relation;
+    if (priority != null) body['priority'] = priority;
+
+    final response = await http.put(
+      Uri.parse('$baseUrl/emergency/contacts/$id'),
+      headers: await _headers(),
+      body: jsonEncode(body),
+    );
+    return jsonDecode(response.body);
+  }
+
+  /// Reorder contacts by sending ordered list of IDs
+  static Future<Map<String, dynamic>> reorderEmergencyContacts({
+    required List<String> orderedIds,
+  }) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/emergency/contacts/reorder'),
+      headers: await _headers(),
+      body: jsonEncode({'orderedIds': orderedIds}),
+    );
+    return jsonDecode(response.body);
+  }
+
   static Future<Map<String, dynamic>> removeEmergencyContact(String id) async {
     final response = await http.delete(
       Uri.parse('$baseUrl/emergency/contacts/$id'),
@@ -157,7 +205,8 @@ class ApiService {
     return jsonDecode(response.body);
   }
 
-  // CHAT
+  // ─── CHAT ──────────────────────────────────────────────────────
+
   static Future<Map<String, dynamic>> getChatSessions() async {
     final response = await http.get(
       Uri.parse('$baseUrl/chat/sessions'),
@@ -174,7 +223,8 @@ class ApiService {
     return jsonDecode(response.body);
   }
 
-  // NOTIFICATIONS / UPDATES
+  // ─── NOTIFICATIONS / UPDATES ───────────────────────────────────
+
   static Future<Map<String, dynamic>> getUpdates() async {
     final response = await http.get(
       Uri.parse('$baseUrl/updates'),
@@ -183,7 +233,8 @@ class ApiService {
     return jsonDecode(response.body);
   }
 
-  // PAYMENTS
+  // ─── PAYMENTS ──────────────────────────────────────────────────
+
   static Future<Map<String, dynamic>> createOrder({
     required String qrId,
     required String orderType,
