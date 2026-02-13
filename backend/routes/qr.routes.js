@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const { authenticate } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth_middleware');
 const { v4: uuidv4 } = require('uuid');
 
 // ─── CREATE QR CODE ─────────────────────────────────────────────
@@ -14,20 +14,13 @@ router.post('/create', authenticate, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Purpose is required' });
     }
 
-    // Generate a unique short code for the QR
-    const uniqueCode = uuidv4().split('-')[0].toUpperCase(); // e.g., "A1B2C3D4"
+    const uniqueCode = uuidv4().split('-')[0].toUpperCase();
     const redirectUrl = `${process.env.STRANGER_WEB_URL || 'https://shubhchintak.app'}/scan/${uniqueCode}`;
 
-    // Map purpose string to enum
     const purposeMap = {
-      'Four-Wheeler': 'FOUR_WHEELER',
-      'Two-Wheeler': 'TWO_WHEELER',
-      'Bag': 'BAG',
-      'Key': 'KEY',
-      'Child Safety': 'CHILD',
-      'Elderly Care': 'ELDERLY',
-      'Pet Tag': 'PET',
-      'Custom': 'CUSTOM',
+      'Four-Wheeler': 'FOUR_WHEELER', 'Two-Wheeler': 'TWO_WHEELER',
+      'Bag': 'BAG', 'Key': 'KEY', 'Child Safety': 'CHILD',
+      'Elderly Care': 'ELDERLY', 'Pet Tag': 'PET', 'Custom': 'CUSTOM',
     };
 
     const qrCode = await prisma.qRCode.create({
@@ -38,24 +31,18 @@ router.post('/create', authenticate, async (req, res) => {
         customPurpose: customPurpose || (purposeMap[purpose] ? null : purpose),
         templateType: templateType || 'blank',
         customization: customization || {},
-        qrImageUrl: redirectUrl, // The URL encoded in the QR
-        status: 'INACTIVE', // Becomes ACTIVE after payment
+        qrImageUrl: redirectUrl,
+        status: 'INACTIVE',
       },
     });
 
     res.status(201).json({
       success: true,
       qr: {
-        id: qrCode.id,
-        uniqueCode: qrCode.uniqueCode,
-        purpose: qrCode.purpose,
-        customPurpose: qrCode.customPurpose,
-        templateType: qrCode.templateType,
-        status: qrCode.status,
-        qrDataUrl: redirectUrl,
-        customization: qrCode.customization,
-        scansCount: qrCode.scansCount,
-        createdAt: qrCode.createdAt,
+        id: qrCode.id, uniqueCode: qrCode.uniqueCode, purpose: qrCode.purpose,
+        customPurpose: qrCode.customPurpose, templateType: qrCode.templateType,
+        status: qrCode.status, qrDataUrl: redirectUrl, customization: qrCode.customization,
+        scansCount: qrCode.scansCount, createdAt: qrCode.createdAt,
       },
     });
   } catch (error) {
@@ -75,17 +62,10 @@ router.get('/my-qrs', authenticate, async (req, res) => {
     res.json({
       success: true,
       qrCodes: qrCodes.map((qr) => ({
-        id: qr.id,
-        uniqueCode: qr.uniqueCode,
-        purpose: qr.purpose,
-        customPurpose: qr.customPurpose,
-        templateType: qr.templateType,
-        status: qr.status,
-        qrDataUrl: qr.qrImageUrl,
-        customization: qr.customization,
-        scansCount: qr.scansCount,
-        activatedAt: qr.activatedAt,
-        createdAt: qr.createdAt,
+        id: qr.id, uniqueCode: qr.uniqueCode, purpose: qr.purpose,
+        customPurpose: qr.customPurpose, templateType: qr.templateType,
+        status: qr.status, qrDataUrl: qr.qrImageUrl, customization: qr.customization,
+        scansCount: qr.scansCount, activatedAt: qr.activatedAt, createdAt: qr.createdAt,
       })),
     });
   } catch (error) {
@@ -113,21 +93,12 @@ router.post('/activate', authenticate, async (req, res) => {
 
     const updated = await prisma.qRCode.update({
       where: { id: qrId },
-      data: {
-        status: 'ACTIVE',
-        activatedAt: new Date(),
-      },
+      data: { status: 'ACTIVE', activatedAt: new Date() },
     });
 
     res.json({
-      success: true,
-      message: 'QR code activated successfully',
-      qr: {
-        id: updated.id,
-        uniqueCode: updated.uniqueCode,
-        status: updated.status,
-        activatedAt: updated.activatedAt,
-      },
+      success: true, message: 'QR code activated successfully',
+      qr: { id: updated.id, uniqueCode: updated.uniqueCode, status: updated.status, activatedAt: updated.activatedAt },
     });
   } catch (error) {
     console.error('Activate QR error:', error);
@@ -135,29 +106,21 @@ router.post('/activate', authenticate, async (req, res) => {
   }
 });
 
-// ─── UPDATE QR CUSTOMIZATION (re-design) ────────────────────────
+// ─── UPDATE QR DESIGN (re-design) ───────────────────────────────
 router.put('/update/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { templateType, customization, purpose, customPurpose } = req.body;
 
-    const qrCode = await prisma.qRCode.findFirst({
-      where: { id, userId: req.user.id },
-    });
-
+    const qrCode = await prisma.qRCode.findFirst({ where: { id, userId: req.user.id } });
     if (!qrCode) {
       return res.status(404).json({ success: false, message: 'QR code not found' });
     }
 
     const purposeMap = {
-      'Four-Wheeler': 'FOUR_WHEELER',
-      'Two-Wheeler': 'TWO_WHEELER',
-      'Bag': 'BAG',
-      'Key': 'KEY',
-      'Child Safety': 'CHILD',
-      'Elderly Care': 'ELDERLY',
-      'Pet Tag': 'PET',
-      'Custom': 'CUSTOM',
+      'Four-Wheeler': 'FOUR_WHEELER', 'Two-Wheeler': 'TWO_WHEELER',
+      'Bag': 'BAG', 'Key': 'KEY', 'Child Safety': 'CHILD',
+      'Elderly Care': 'ELDERLY', 'Pet Tag': 'PET', 'Custom': 'CUSTOM',
     };
 
     const updated = await prisma.qRCode.update({
@@ -173,14 +136,9 @@ router.put('/update/:id', authenticate, async (req, res) => {
     res.json({
       success: true,
       qr: {
-        id: updated.id,
-        uniqueCode: updated.uniqueCode,
-        purpose: updated.purpose,
-        customPurpose: updated.customPurpose,
-        templateType: updated.templateType,
-        status: updated.status,
-        qrDataUrl: updated.qrImageUrl,
-        customization: updated.customization,
+        id: updated.id, uniqueCode: updated.uniqueCode, purpose: updated.purpose,
+        customPurpose: updated.customPurpose, templateType: updated.templateType,
+        status: updated.status, qrDataUrl: updated.qrImageUrl, customization: updated.customization,
         createdAt: updated.createdAt,
       },
     });
@@ -190,7 +148,7 @@ router.put('/update/:id', authenticate, async (req, res) => {
   }
 });
 
-// ─── SCAN QR (stranger side — public, no auth) ──────────────────
+// ─── SCAN QR (public, no auth) ──────────────────────────────────
 router.get('/scan/:code', async (req, res) => {
   try {
     const { code } = req.params;
@@ -208,30 +166,19 @@ router.get('/scan/:code', async (req, res) => {
       return res.json({ success: false, message: 'This QR code is currently inactive', status: qrCode.status });
     }
 
-    // Increment scan count
     await prisma.qRCode.update({
       where: { uniqueCode: code },
       data: { scansCount: { increment: 1 } },
     });
 
-    // Log the scan
     await prisma.scanLog.create({
-      data: {
-        qrCodeId: qrCode.id,
-        scannerIp: req.ip,
-        userAgent: req.headers['user-agent'],
-      },
+      data: { qrCodeId: qrCode.id, scannerIp: req.ip, userAgent: req.headers['user-agent'] },
     });
 
     res.json({
       success: true,
-      qr: {
-        id: qrCode.id,
-        purpose: qrCode.purpose,
-        customPurpose: qrCode.customPurpose,
-        ownerId: qrCode.userId,
-        ownerName: qrCode.user.name.split(' ')[0], // First name only for privacy
-      },
+      qr: { id: qrCode.id, purpose: qrCode.purpose, customPurpose: qrCode.customPurpose,
+        ownerId: qrCode.userId, ownerName: qrCode.user.name.split(' ')[0] },
     });
   } catch (error) {
     console.error('Scan QR error:', error);

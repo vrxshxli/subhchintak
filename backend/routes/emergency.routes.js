@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { PrismaClient } = require('@prisma/client');
 const prisma = new PrismaClient();
-const { authenticate } = require('../middleware/auth');
+const { authenticate } = require('../middleware/auth_middleware');
 
 // ─── GET ALL EMERGENCY CONTACTS ─────────────────────────────────
 router.get('/contacts', authenticate, async (req, res) => {
@@ -11,16 +11,11 @@ router.get('/contacts', authenticate, async (req, res) => {
       where: { userId: req.user.id },
       orderBy: { priority: 'asc' },
     });
-
     res.json({
       success: true,
       contacts: contacts.map((c) => ({
-        id: c.id,
-        name: c.name,
-        phone: c.phone,
-        relation: c.relation || '',
-        priority: c.priority,
-        createdAt: c.createdAt,
+        id: c.id, name: c.name, phone: c.phone,
+        relation: c.relation || '', priority: c.priority, createdAt: c.createdAt,
       })),
     });
   } catch (error) {
@@ -29,54 +24,32 @@ router.get('/contacts', authenticate, async (req, res) => {
   }
 });
 
-// ─── ADD SINGLE EMERGENCY CONTACT ───────────────────────────────
+// ─── ADD SINGLE CONTACT ─────────────────────────────────────────
 router.post('/contacts', authenticate, async (req, res) => {
   try {
     const { name, phone, relation, priority } = req.body;
-
     if (!name || !phone) {
       return res.status(400).json({ success: false, message: 'Name and phone are required' });
     }
 
-    // Check for duplicate phone
-    const existing = await prisma.emergencyContact.findFirst({
-      where: { userId: req.user.id, phone },
-    });
-
+    const existing = await prisma.emergencyContact.findFirst({ where: { userId: req.user.id, phone } });
     if (existing) {
       return res.status(409).json({ success: false, message: 'Contact with this phone already exists' });
     }
 
-    // Get the next priority if not provided
     let contactPriority = priority;
     if (contactPriority === undefined || contactPriority === null) {
-      const maxPriority = await prisma.emergencyContact.aggregate({
-        where: { userId: req.user.id },
-        _max: { priority: true },
-      });
-      contactPriority = (maxPriority._max.priority || 0) + 1;
+      const max = await prisma.emergencyContact.aggregate({ where: { userId: req.user.id }, _max: { priority: true } });
+      contactPriority = (max._max.priority || 0) + 1;
     }
 
     const contact = await prisma.emergencyContact.create({
-      data: {
-        userId: req.user.id,
-        name,
-        phone,
-        relation: relation || '',
-        priority: contactPriority,
-      },
+      data: { userId: req.user.id, name, phone, relation: relation || '', priority: contactPriority },
     });
 
     res.status(201).json({
       success: true,
-      contact: {
-        id: contact.id,
-        name: contact.name,
-        phone: contact.phone,
-        relation: contact.relation,
-        priority: contact.priority,
-        createdAt: contact.createdAt,
-      },
+      contact: { id: contact.id, name: contact.name, phone: contact.phone, relation: contact.relation, priority: contact.priority, createdAt: contact.createdAt },
     });
   } catch (error) {
     console.error('Add emergency contact error:', error);
@@ -88,117 +61,57 @@ router.post('/contacts', authenticate, async (req, res) => {
 router.post('/contacts/bulk', authenticate, async (req, res) => {
   try {
     const { contacts } = req.body;
-
     if (!contacts || !Array.isArray(contacts) || contacts.length === 0) {
       return res.status(400).json({ success: false, message: 'Contacts array is required' });
     }
 
-    // Get existing contacts to skip duplicates
-    const existingContacts = await prisma.emergencyContact.findMany({
-      where: { userId: req.user.id },
-      select: { phone: true },
-    });
+    const existingContacts = await prisma.emergencyContact.findMany({ where: { userId: req.user.id }, select: { phone: true } });
     const existingPhones = new Set(existingContacts.map((c) => c.phone));
 
-    // Get current max priority
-    const maxPriority = await prisma.emergencyContact.aggregate({
-      where: { userId: req.user.id },
-      _max: { priority: true },
-    });
-    let nextPriority = (maxPriority._max.priority || 0) + 1;
+    const max = await prisma.emergencyContact.aggregate({ where: { userId: req.user.id }, _max: { priority: true } });
+    let nextPriority = (max._max.priority || 0) + 1;
 
-    // Filter out duplicates and prepare new contacts
     const newContacts = [];
     for (const contact of contacts) {
       if (!contact.name || !contact.phone) continue;
       if (existingPhones.has(contact.phone)) continue;
-
-      newContacts.push({
-        userId: req.user.id,
-        name: contact.name,
-        phone: contact.phone,
-        relation: contact.relation || '',
-        priority: nextPriority++,
-      });
-
-      existingPhones.add(contact.phone); // prevent duplicates within batch
+      newContacts.push({ userId: req.user.id, name: contact.name, phone: contact.phone, relation: contact.relation || '', priority: nextPriority++ });
+      existingPhones.add(contact.phone);
     }
 
     if (newContacts.length === 0) {
-      return res.json({
-        success: true,
-        message: 'All contacts already exist',
-        addedCount: 0,
-        contacts: [],
-      });
+      return res.json({ success: true, message: 'All contacts already exist', addedCount: 0, contacts: [] });
     }
 
-    // Bulk insert
     await prisma.emergencyContact.createMany({ data: newContacts });
 
-    // Fetch all contacts after insert to return full list
-    const allContacts = await prisma.emergencyContact.findMany({
-      where: { userId: req.user.id },
-      orderBy: { priority: 'asc' },
-    });
+    const allContacts = await prisma.emergencyContact.findMany({ where: { userId: req.user.id }, orderBy: { priority: 'asc' } });
 
     res.status(201).json({
-      success: true,
-      message: `${newContacts.length} contact(s) added`,
-      addedCount: newContacts.length,
-      contacts: allContacts.map((c) => ({
-        id: c.id,
-        name: c.name,
-        phone: c.phone,
-        relation: c.relation || '',
-        priority: c.priority,
-        createdAt: c.createdAt,
-      })),
+      success: true, message: `${newContacts.length} contact(s) added`, addedCount: newContacts.length,
+      contacts: allContacts.map((c) => ({ id: c.id, name: c.name, phone: c.phone, relation: c.relation || '', priority: c.priority, createdAt: c.createdAt })),
     });
   } catch (error) {
-    console.error('Bulk add emergency contacts error:', error);
+    console.error('Bulk add error:', error);
     res.status(500).json({ success: false, message: 'Failed to sync contacts' });
   }
 });
 
-// ─── UPDATE CONTACT (relation, priority, name) ──────────────────
+// ─── UPDATE CONTACT ─────────────────────────────────────────────
 router.put('/contacts/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
     const { name, phone, relation, priority } = req.body;
-
-    // Verify ownership
-    const contact = await prisma.emergencyContact.findFirst({
-      where: { id, userId: req.user.id },
-    });
-
-    if (!contact) {
-      return res.status(404).json({ success: false, message: 'Contact not found' });
-    }
+    const contact = await prisma.emergencyContact.findFirst({ where: { id, userId: req.user.id } });
+    if (!contact) return res.status(404).json({ success: false, message: 'Contact not found' });
 
     const updated = await prisma.emergencyContact.update({
       where: { id },
-      data: {
-        ...(name && { name }),
-        ...(phone && { phone }),
-        ...(relation !== undefined && { relation }),
-        ...(priority !== undefined && { priority }),
-      },
+      data: { ...(name && { name }), ...(phone && { phone }), ...(relation !== undefined && { relation }), ...(priority !== undefined && { priority }) },
     });
-
-    res.json({
-      success: true,
-      contact: {
-        id: updated.id,
-        name: updated.name,
-        phone: updated.phone,
-        relation: updated.relation,
-        priority: updated.priority,
-        createdAt: updated.createdAt,
-      },
-    });
+    res.json({ success: true, contact: { id: updated.id, name: updated.name, phone: updated.phone, relation: updated.relation, priority: updated.priority, createdAt: updated.createdAt } });
   } catch (error) {
-    console.error('Update emergency contact error:', error);
+    console.error('Update contact error:', error);
     res.status(500).json({ success: false, message: 'Failed to update contact' });
   }
 });
@@ -207,24 +120,16 @@ router.put('/contacts/:id', authenticate, async (req, res) => {
 router.put('/contacts/reorder', authenticate, async (req, res) => {
   try {
     const { orderedIds } = req.body;
-
     if (!orderedIds || !Array.isArray(orderedIds)) {
       return res.status(400).json({ success: false, message: 'orderedIds array is required' });
     }
-
-    // Update priority for each contact
     const updates = orderedIds.map((id, index) =>
-      prisma.emergencyContact.updateMany({
-        where: { id, userId: req.user.id },
-        data: { priority: index + 1 },
-      })
+      prisma.emergencyContact.updateMany({ where: { id, userId: req.user.id }, data: { priority: index + 1 } })
     );
-
     await prisma.$transaction(updates);
-
     res.json({ success: true, message: 'Contacts reordered' });
   } catch (error) {
-    console.error('Reorder emergency contacts error:', error);
+    console.error('Reorder error:', error);
     res.status(500).json({ success: false, message: 'Failed to reorder contacts' });
   }
 });
@@ -233,38 +138,18 @@ router.put('/contacts/reorder', authenticate, async (req, res) => {
 router.delete('/contacts/:id', authenticate, async (req, res) => {
   try {
     const { id } = req.params;
-
-    // Verify ownership
-    const contact = await prisma.emergencyContact.findFirst({
-      where: { id, userId: req.user.id },
-    });
-
-    if (!contact) {
-      return res.status(404).json({ success: false, message: 'Contact not found' });
-    }
+    const contact = await prisma.emergencyContact.findFirst({ where: { id, userId: req.user.id } });
+    if (!contact) return res.status(404).json({ success: false, message: 'Contact not found' });
 
     await prisma.emergencyContact.delete({ where: { id } });
 
-    // Re-sequence priorities
-    const remaining = await prisma.emergencyContact.findMany({
-      where: { userId: req.user.id },
-      orderBy: { priority: 'asc' },
-    });
-
-    const reorder = remaining.map((c, i) =>
-      prisma.emergencyContact.update({
-        where: { id: c.id },
-        data: { priority: i + 1 },
-      })
-    );
-
-    if (reorder.length > 0) {
-      await prisma.$transaction(reorder);
-    }
+    const remaining = await prisma.emergencyContact.findMany({ where: { userId: req.user.id }, orderBy: { priority: 'asc' } });
+    const reorder = remaining.map((c, i) => prisma.emergencyContact.update({ where: { id: c.id }, data: { priority: i + 1 } }));
+    if (reorder.length > 0) await prisma.$transaction(reorder);
 
     res.json({ success: true, message: 'Contact deleted' });
   } catch (error) {
-    console.error('Delete emergency contact error:', error);
+    console.error('Delete contact error:', error);
     res.status(500).json({ success: false, message: 'Failed to delete contact' });
   }
 });
