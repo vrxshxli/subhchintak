@@ -83,7 +83,11 @@ class _DashboardScreenState extends State<DashboardScreen> {
               FadeInUp(delay: const Duration(milliseconds: 300), child: Text(lang.t('quick_actions'), style: GoogleFonts.spaceGrotesk(fontSize: 20, fontWeight: FontWeight.w600))),
               const SizedBox(height: 16),
               FadeInUp(delay: const Duration(milliseconds: 400), child: Row(children: [
-                Expanded(child: _act(context, Icons.qr_code_2_rounded, lang.t('order_qr'), lang.t('get_safety_qr'), '/order-qr', AppColors.accent)),
+                // Show "Order QR" only if no active QR, otherwise show "Design QR"
+                if (!qr.hasActiveQR)
+                  Expanded(child: _act(context, Icons.qr_code_2_rounded, lang.t('order_qr'), lang.t('get_safety_qr'), '/order-qr', AppColors.accent))
+                else
+                  Expanded(child: _act(context, Icons.design_services_rounded, lang.t('design_qr'), 'Re-design your QR', '/design-qr-entry', AppColors.accent)),
                 const SizedBox(width: 12),
                 Expanded(child: _act(context, Icons.design_services_rounded, lang.t('design_qr'), lang.t('customize_qr'), '/design-qr-entry', AppColors.info)),
               ])),
@@ -113,22 +117,24 @@ class _DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _qrCard(BuildContext context, QRProvider qr, LanguageProvider lang) {
-    final a = qr.hasActiveQR;
+    final hasActive = qr.hasActiveQR;
+    final activeCount = qr.activeQRCount;
+
     return Container(width: double.infinity, padding: const EdgeInsets.all(24), decoration: BoxDecoration(
       gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: a ? [const Color(0xFF1B3A4B), const Color(0xFF1B2838)] : [const Color(0xFF2D4059), const Color(0xFF1B2838)]),
+          colors: hasActive ? [const Color(0xFF1B3A4B), const Color(0xFF1B2838)] : [const Color(0xFF2D4059), const Color(0xFF1B2838)]),
       borderRadius: BorderRadius.circular(20),
       boxShadow: [BoxShadow(color: const Color(0xFF1B2838).withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 8))]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text(lang.t('qr_status'), style: GoogleFonts.poppins(fontSize: 14, color: Colors.white.withOpacity(0.7))),
           Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6), decoration: BoxDecoration(
-              color: a ? AppColors.success.withOpacity(0.2) : AppColors.warning.withOpacity(0.2), borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: a ? AppColors.success.withOpacity(0.4) : AppColors.warning.withOpacity(0.4))),
+              color: hasActive ? AppColors.success.withOpacity(0.2) : AppColors.warning.withOpacity(0.2), borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: hasActive ? AppColors.success.withOpacity(0.4) : AppColors.warning.withOpacity(0.4))),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: a ? AppColors.success : AppColors.warning)),
+                Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: hasActive ? AppColors.success : AppColors.warning)),
                 const SizedBox(width: 8),
-                Text(a ? lang.t('active') : lang.t('inactive'), style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: a ? AppColors.success : AppColors.warning)),
+                Text(hasActive ? lang.t('active') : lang.t('inactive'), style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: hasActive ? AppColors.success : AppColors.warning)),
               ])),
         ]),
         const SizedBox(height: 20),
@@ -137,15 +143,33 @@ class _DashboardScreenState extends State<DashboardScreen> {
               child: const Icon(Icons.qr_code_2_rounded, size: 32, color: Colors.white)),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(a ? '${qr.qrCodes.length} QR Code(s)' : lang.t('no_active_qr'), style: GoogleFonts.spaceGrotesk(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
+            Text(hasActive ? '$activeCount QR Code(s) Active' : lang.t('no_active_qr'),
+                style: GoogleFonts.spaceGrotesk(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
             const SizedBox(height: 4),
-            Text(a ? lang.t('belongings_protected') : lang.t('generate_to_start'), style: GoogleFonts.poppins(fontSize: 13, color: Colors.white.withOpacity(0.6))),
+            Text(hasActive ? lang.t('belongings_protected') : lang.t('generate_to_start'),
+                style: GoogleFonts.poppins(fontSize: 13, color: Colors.white.withOpacity(0.6))),
           ])),
         ]),
-        if (!a) ...[const SizedBox(height: 20), SizedBox(width: double.infinity, child: ElevatedButton(
-          onPressed: () => Navigator.pushNamed(context, '/order-qr'),
-          style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-          child: Text(lang.t('generate_first_qr'), style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white))))],
+        // Show "Generate First QR" only when no QR exists at all
+        if (!hasActive && qr.qrCodes.isEmpty) ...[
+          const SizedBox(height: 20),
+          SizedBox(width: double.infinity, child: ElevatedButton(
+            onPressed: () => Navigator.pushNamed(context, '/order-qr'),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            child: Text(lang.t('generate_first_qr'), style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)))),
+        ],
+        // Show "Design QR" when QR exists but might need re-design
+        if (hasActive) ...[
+          const SizedBox(height: 20),
+          SizedBox(width: double.infinity, child: OutlinedButton.icon(
+            onPressed: () => Navigator.pushNamed(context, '/design-qr-entry'),
+            icon: const Icon(Icons.brush_rounded, size: 20, color: Colors.white),
+            label: Text('Re-design for another item', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+            style: OutlinedButton.styleFrom(side: BorderSide(color: Colors.white.withOpacity(0.3)),
+                padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+          )),
+        ],
       ]),
     );
   }

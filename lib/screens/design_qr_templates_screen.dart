@@ -14,6 +14,7 @@ class DesignQRTemplatesScreen extends StatefulWidget {
 
 class _DesignQRTemplatesScreenState extends State<DesignQRTemplatesScreen> {
   int _selectedIndex = -1;
+  bool _isCreating = false;
   final _customPurposeController = TextEditingController();
 
   final _templates = [
@@ -33,6 +34,43 @@ class _DesignQRTemplatesScreenState extends State<DesignQRTemplatesScreen> {
     super.dispose();
   }
 
+  Future<void> _onContinue() async {
+    if (_selectedIndex < 0) return;
+
+    final qrProvider = context.read<QRProvider>();
+    final template = _templates[_selectedIndex];
+    qrProvider.setTemplate(template['title'] as String);
+
+    setState(() => _isCreating = true);
+
+    // Check if user already has an active QR — if so, we're re-designing, not creating new
+    if (qrProvider.hasActiveQR && qrProvider.activeQR != null) {
+      // Re-design: update the existing QR's template
+      await qrProvider.updateQRDesign(
+        qrProvider.activeQR!['id'],
+        templateType: template['title'] as String,
+        purpose: template['title'] as String,
+      );
+      qrProvider.setCurrentQR(qrProvider.activeQR!);
+      setState(() => _isCreating = false);
+      if (mounted) Navigator.pushNamed(context, '/qr-canvas');
+      return;
+    }
+
+    // New QR: create it
+    final qr = await qrProvider.createQR();
+
+    setState(() => _isCreating = false);
+
+    if (qr != null && mounted) {
+      Navigator.pushNamed(context, '/qr-canvas');
+    } else if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Failed to create QR. Please try again.')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -50,25 +88,17 @@ class _DesignQRTemplatesScreenState extends State<DesignQRTemplatesScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  FadeInDown(
-                    child: Text('What is this QR for?',
-                        style: GoogleFonts.spaceGrotesk(fontSize: 22, fontWeight: FontWeight.w700)),
-                  ),
+                  FadeInDown(child: Text('What is this QR for?',
+                      style: GoogleFonts.spaceGrotesk(fontSize: 22, fontWeight: FontWeight.w700))),
                   const SizedBox(height: 8),
-                  FadeInDown(
-                    delay: const Duration(milliseconds: 100),
+                  FadeInDown(delay: const Duration(milliseconds: 100),
                     child: Text('Select the purpose to get the best template',
-                        style: GoogleFonts.poppins(fontSize: 14, color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)),
-                  ),
+                        style: GoogleFonts.poppins(fontSize: 14, color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary))),
                   const SizedBox(height: 24),
                   Expanded(
                     child: GridView.builder(
                       gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: 2,
-                        mainAxisSpacing: 14,
-                        crossAxisSpacing: 14,
-                        childAspectRatio: 1.3,
-                      ),
+                          crossAxisCount: 2, mainAxisSpacing: 14, crossAxisSpacing: 14, childAspectRatio: 1.3),
                       itemCount: _templates.length,
                       itemBuilder: (context, index) {
                         final t = _templates[index];
@@ -78,9 +108,7 @@ class _DesignQRTemplatesScreenState extends State<DesignQRTemplatesScreen> {
                           child: GestureDetector(
                             onTap: () {
                               setState(() => _selectedIndex = index);
-                              if (t['title'] == 'Custom') {
-                                _showCustomPurposeDialog();
-                              }
+                              if (t['title'] == 'Custom') _showCustomPurposeDialog();
                             },
                             child: AnimatedContainer(
                               duration: const Duration(milliseconds: 200),
@@ -90,33 +118,18 @@ class _DesignQRTemplatesScreenState extends State<DesignQRTemplatesScreen> {
                                 borderRadius: BorderRadius.circular(16),
                                 border: Border.all(
                                   color: isSelected ? (t['color'] as Color) : (isDark ? AppColors.darkDivider : AppColors.lightDivider),
-                                  width: isSelected ? 2 : 1,
-                                ),
-                                boxShadow: isSelected
-                                    ? [BoxShadow(color: (t['color'] as Color).withOpacity(0.15), blurRadius: 16)]
-                                    : [],
-                              ),
-                              child: Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Container(
-                                    width: 48, height: 48,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(14),
-                                      color: (t['color'] as Color).withOpacity(0.1),
-                                    ),
-                                    child: Icon(t['icon'] as IconData, color: t['color'] as Color, size: 24),
-                                  ),
-                                  const SizedBox(height: 10),
-                                  Text(t['title'] as String,
-                                      style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600),
-                                      textAlign: TextAlign.center),
-                                  const SizedBox(height: 2),
-                                  Text(t['subtitle'] as String,
-                                      style: GoogleFonts.poppins(fontSize: 11, color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary),
-                                      textAlign: TextAlign.center),
-                                ],
-                              ),
+                                  width: isSelected ? 2 : 1),
+                                boxShadow: isSelected ? [BoxShadow(color: (t['color'] as Color).withOpacity(0.15), blurRadius: 16)] : []),
+                              child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+                                Container(width: 48, height: 48, decoration: BoxDecoration(borderRadius: BorderRadius.circular(14),
+                                    color: (t['color'] as Color).withOpacity(0.1)),
+                                    child: Icon(t['icon'] as IconData, color: t['color'] as Color, size: 24)),
+                                const SizedBox(height: 10),
+                                Text(t['title'] as String, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600), textAlign: TextAlign.center),
+                                const SizedBox(height: 2),
+                                Text(t['subtitle'] as String, style: GoogleFonts.poppins(fontSize: 11,
+                                    color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary), textAlign: TextAlign.center),
+                              ]),
                             ),
                           ),
                         );
@@ -127,22 +140,15 @@ class _DesignQRTemplatesScreenState extends State<DesignQRTemplatesScreen> {
               ),
             ),
           ),
-          // Continue button
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 0, 20, 24),
             child: SizedBox(
-              width: double.infinity,
-              height: 56,
+              width: double.infinity, height: 56,
               child: ElevatedButton(
-                onPressed: _selectedIndex >= 0
-                    ? () {
-                        final qrProvider = context.read<QRProvider>();
-                        final template = _templates[_selectedIndex];
-                        qrProvider.setTemplate(template['title'] as String);
-                        Navigator.pushNamed(context, '/qr-canvas');
-                      }
-                    : null,
-                child: Text('Continue to Canvas', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600)),
+                onPressed: (_selectedIndex >= 0 && !_isCreating) ? _onContinue : null,
+                child: _isCreating
+                    ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.white))
+                    : Text('Continue to Canvas', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600)),
               ),
             ),
           ),
@@ -157,21 +163,16 @@ class _DesignQRTemplatesScreenState extends State<DesignQRTemplatesScreen> {
       builder: (ctx) => AlertDialog(
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
         title: Text('Custom Purpose', style: GoogleFonts.spaceGrotesk(fontWeight: FontWeight.w700)),
-        content: TextField(
-          controller: _customPurposeController,
-          decoration: const InputDecoration(hintText: 'e.g., Laptop, Camera, Wallet...'),
-        ),
+        content: TextField(controller: _customPurposeController,
+            decoration: const InputDecoration(hintText: 'e.g., Laptop, Camera, Wallet...')),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
-          ElevatedButton(
-            onPressed: () {
-              if (_customPurposeController.text.isNotEmpty) {
-                context.read<QRProvider>().setCustomPurpose(_customPurposeController.text);
-                Navigator.pop(ctx);
-              }
-            },
-            child: const Text('Set Purpose'),
-          ),
+          ElevatedButton(onPressed: () {
+            if (_customPurposeController.text.isNotEmpty) {
+              context.read<QRProvider>().setCustomPurpose(_customPurposeController.text);
+              Navigator.pop(ctx);
+            }
+          }, child: const Text('Set Purpose')),
         ],
       ),
     );

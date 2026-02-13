@@ -31,6 +31,9 @@ dependencies:
   # ✅ REQUIRED FOR QR CANVAS IMAGE & LOGO PICKING
   image_picker: ^1.0.7
 
+  # ✅ REQUIRED FOR QR DOWNLOAD & SHARING (PDF, PNG, JPEG, JPG)
+  share_plus: ^7.2.1
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
