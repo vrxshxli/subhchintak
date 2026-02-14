@@ -218,7 +218,12 @@ model ChatSession {
   @@map("chat_sessions")
 }
 
-enum MessageType { TEXT VOICE LOCATION SYSTEM }
+enum MessageType {
+  TEXT
+  VOICE
+  LOCATION
+  SYSTEM
+}
 
 model ChatMessage {
   id          String      @id @default(uuid())
@@ -238,7 +243,14 @@ model ChatMessage {
   @@map("chat_messages")
 }
 
-enum CallStatus { INITIATED RINGING ANSWERED MISSED ESCALATED COMPLETED }
+enum CallStatus {
+  INITIATED
+  RINGING
+  ANSWERED
+  MISSED
+  ESCALATED
+  COMPLETED
+}
 
 model CallLog {
   id                 String     @id @default(uuid())
@@ -259,8 +271,20 @@ model CallLog {
   @@map("call_logs")
 }
 
-enum OrderStatus { PENDING PAID PROCESSING SHIPPED DELIVERED CANCELLED }
-enum OrderType { PDF_DOWNLOAD PHYSICAL_STICKER YEARLY_SUBSCRIPTION }
+enum OrderStatus {
+  PENDING
+  PAID
+  PROCESSING
+  SHIPPED
+  DELIVERED
+  CANCELLED
+}
+
+enum OrderType {
+  PDF_DOWNLOAD
+  PHYSICAL_STICKER
+  YEARLY_SUBSCRIPTION
+}
 
 model Order {
   id             String      @id @default(uuid())
