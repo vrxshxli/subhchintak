@@ -33,15 +33,15 @@ import 'screens/notification_settings_screen.dart';
 import 'screens/privacy_security_screen.dart';
 import 'screens/help_support_screen.dart';
 import 'screens/about_screen.dart';
+import 'screens/order_sticker_screen.dart';
+import 'screens/address_screen.dart';
+import 'screens/sticker_payment_screen.dart';
 import 'theme/app_theme.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   await Firebase.initializeApp();
-  SystemChrome.setPreferredOrientations([
-    DeviceOrientation.portraitUp,
-    DeviceOrientation.portraitDown,
-  ]);
+  SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp, DeviceOrientation.portraitDown]);
   runApp(const ShubhchintakApp());
 }
 
@@ -94,6 +94,10 @@ class ShubhchintakApp extends StatelessWidget {
               '/privacy-security': (context) => const PrivacySecurityScreen(),
               '/help-support': (context) => const HelpSupportScreen(),
               '/about': (context) => const AboutScreen(),
+              // ─── NEW ROUTES ────────────────────────────
+              '/order-sticker': (context) => const OrderStickerScreen(),
+              '/address': (context) => const AddressScreen(),
+              '/sticker-payment': (context) => const StickerPaymentScreen(),
             },
           );
         },

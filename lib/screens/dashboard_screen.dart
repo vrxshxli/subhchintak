@@ -17,174 +17,141 @@ class DashboardScreen extends StatefulWidget {
 }
 
 class _DashboardScreenState extends State<DashboardScreen> {
-  String? _avatarEmoji;
-  int _avatarIndex = -1;
-  final List<Color> _avatarBgs = [
-    const Color(0xFFFFE0B2), const Color(0xFFFFF9C4), const Color(0xFFFFCCBC), const Color(0xFFE0E0E0),
-    const Color(0xFFD1C4E9), const Color(0xFFFFE082), const Color(0xFFB3E5FC), const Color(0xFFCFD8DC),
-    const Color(0xFFB2EBF2), const Color(0xFFFFF176), const Color(0xFFFFAB91), const Color(0xFFB2DFDB),
-    const Color(0xFFBBDEFB), const Color(0xFFF8BBD0), const Color(0xFFC8E6C9), const Color(0xFFFFE57F),
-  ];
+  String? _avatarEmoji; int _avatarIndex = -1;
+  final List<Color> _avatarBgs = [const Color(0xFFFFE0B2),const Color(0xFFFFF9C4),const Color(0xFFFFCCBC),const Color(0xFFE0E0E0),const Color(0xFFD1C4E9),const Color(0xFFFFE082),const Color(0xFFB3E5FC),const Color(0xFFCFD8DC),const Color(0xFFB2EBF2),const Color(0xFFFFF176),const Color(0xFFFFAB91),const Color(0xFFB2DFDB),const Color(0xFFBBDEFB),const Color(0xFFF8BBD0),const Color(0xFFC8E6C9),const Color(0xFFFFE57F)];
 
   @override
-  void initState() {
-    super.initState();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      context.read<QRProvider>().loadQRCodes();
-      context.read<AuthProvider>().loadProfile();
-      _loadAvatar();
-      final lp = context.read<LanguageProvider>();
-      if (!lp.hasChosenLanguage) {
-        Future.delayed(const Duration(milliseconds: 500), () {
-          if (mounted) LanguageSelectionDialog.show(context, isFirstTime: true);
-        });
-      }
-    });
-  }
+  void initState() { super.initState(); WidgetsBinding.instance.addPostFrameCallback((_) {
+    context.read<QRProvider>().loadQRCodes(); context.read<AuthProvider>().loadProfile(); _loadAvatar();
+    final lp = context.read<LanguageProvider>(); if (!lp.hasChosenLanguage) Future.delayed(const Duration(milliseconds: 500), () { if (mounted) LanguageSelectionDialog.show(context, isFirstTime: true); });
+  }); }
 
-  Future<void> _loadAvatar() async {
-    final p = await SharedPreferences.getInstance();
-    setState(() { _avatarEmoji = p.getString('profile_avatar'); _avatarIndex = p.getInt('profile_avatar_index') ?? -1; });
-  }
+  Future<void> _loadAvatar() async { final p = await SharedPreferences.getInstance(); setState(() { _avatarEmoji = p.getString('profile_avatar'); _avatarIndex = p.getInt('profile_avatar_index') ?? -1; }); }
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final auth = context.watch<AuthProvider>();
-    final qr = context.watch<QRProvider>();
-    final lang = context.watch<LanguageProvider>();
+    final auth = context.watch<AuthProvider>(); final qr = context.watch<QRProvider>(); final lang = context.watch<LanguageProvider>();
     final userName = auth.user?['name'] ?? 'User';
 
-    return AppShell(
-      currentIndex: 1,
-      body: Stack(children: [
-        RefreshIndicator(
-          onRefresh: () async { await qr.loadQRCodes(); await _loadAvatar(); },
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.all(20),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              FadeInDown(child: Row(children: [
-                if (_avatarIndex >= 0 && _avatarEmoji != null)
-                  Container(width: 48, height: 48, decoration: BoxDecoration(shape: BoxShape.circle, color: _avatarBgs[_avatarIndex]),
-                      child: Center(child: Text(_avatarEmoji!, style: const TextStyle(fontSize: 26))))
-                else
-                  Container(width: 48, height: 48, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [AppColors.accent, AppColors.accentLight])),
-                      child: Center(child: Text(userName[0].toUpperCase(), style: GoogleFonts.spaceGrotesk(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white)))),
-                const SizedBox(width: 14),
-                Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('${lang.t('hello')}, $userName', style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
-                  Text(lang.t('keep_safe'), style: GoogleFonts.poppins(fontSize: 13, color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)),
-                ])),
-              ])),
-              const SizedBox(height: 24),
-              FadeInUp(delay: const Duration(milliseconds: 200), child: _qrCard(context, qr, lang)),
-              const SizedBox(height: 20),
-              FadeInUp(delay: const Duration(milliseconds: 300), child: Text(lang.t('quick_actions'), style: GoogleFonts.spaceGrotesk(fontSize: 20, fontWeight: FontWeight.w600))),
-              const SizedBox(height: 16),
-              FadeInUp(delay: const Duration(milliseconds: 400), child: Row(children: [
-                // Show "Order QR" only if no active QR, otherwise show "Design QR"
-                if (!qr.hasActiveQR)
-                  Expanded(child: _act(context, Icons.qr_code_2_rounded, lang.t('order_qr'), lang.t('get_safety_qr'), '/order-qr', AppColors.accent))
-                else
-                  Expanded(child: _act(context, Icons.design_services_rounded, lang.t('design_qr'), 'Re-design your QR', '/design-qr-entry', AppColors.accent)),
-                const SizedBox(width: 12),
-                Expanded(child: _act(context, Icons.design_services_rounded, lang.t('design_qr'), lang.t('customize_qr'), '/design-qr-entry', AppColors.info)),
-              ])),
-              const SizedBox(height: 12),
-              FadeInUp(delay: const Duration(milliseconds: 500), child: Row(children: [
-                Expanded(child: _act(context, Icons.emergency_rounded, lang.t('emergency'), lang.t('manage_contacts'), '/emergency-contacts', AppColors.danger)),
-                const SizedBox(width: 12),
-                Expanded(child: _act(context, Icons.local_offer_rounded, lang.t('my_tags'), lang.t('view_all_qr'), '/tag-details', AppColors.success)),
-              ])),
-              const SizedBox(height: 28),
-              FadeInUp(delay: const Duration(milliseconds: 600), child: Text(lang.t('recent_activity'), style: GoogleFonts.spaceGrotesk(fontSize: 20, fontWeight: FontWeight.w600))),
-              const SizedBox(height: 16),
-              FadeInUp(delay: const Duration(milliseconds: 700), child: _activity(isDark)),
-              const SizedBox(height: 80),
-            ]),
-          ),
-        ),
-        Positioned(bottom: 20, right: 20, child: FadeInUp(delay: const Duration(milliseconds: 800), child: GestureDetector(
-          onTap: () => Navigator.pushNamed(context, '/help-support'),
-          child: Container(width: 56, height: 56, decoration: BoxDecoration(shape: BoxShape.circle,
-              gradient: const LinearGradient(colors: [AppColors.accent, AppColors.accentLight]),
-              boxShadow: [BoxShadow(color: AppColors.accent.withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 6))]),
-              child: const Icon(Icons.headset_mic_rounded, color: Colors.white, size: 26)),
-        ))),
-      ]),
-    );
+    return AppShell(currentIndex: 1, body: RefreshIndicator(
+      onRefresh: () async { await qr.loadQRCodes(); await _loadAvatar(); },
+      child: SingleChildScrollView(physics: const AlwaysScrollableScrollPhysics(), padding: const EdgeInsets.all(20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          // Greeting
+          FadeInDown(child: Row(children: [
+            _avatarIndex >= 0 && _avatarEmoji != null
+                ? Container(width: 48, height: 48, decoration: BoxDecoration(shape: BoxShape.circle, color: _avatarBgs[_avatarIndex]), child: Center(child: Text(_avatarEmoji!, style: const TextStyle(fontSize: 26))))
+                : Container(width: 48, height: 48, decoration: const BoxDecoration(shape: BoxShape.circle, gradient: LinearGradient(colors: [AppColors.accent, AppColors.accentLight])),
+                    child: Center(child: Text(userName[0].toUpperCase(), style: GoogleFonts.spaceGrotesk(fontSize: 22, fontWeight: FontWeight.w700, color: Colors.white)))),
+            const SizedBox(width: 14),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${lang.t('hello')}, $userName', style: GoogleFonts.spaceGrotesk(fontSize: 24, fontWeight: FontWeight.w700, letterSpacing: -0.5)),
+              Text(lang.t('keep_safe'), style: GoogleFonts.poppins(fontSize: 13, color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)),
+            ])),
+          ])),
+          const SizedBox(height: 24),
+
+          // QR Status Card
+          FadeInUp(delay: const Duration(milliseconds: 200), child: _qrCard(context, qr, lang)),
+          const SizedBox(height: 16),
+
+          // Order Offline Sticker card (only if subscribed & has tags)
+          if (qr.hasActiveSubscription && qr.tagDesigns.isNotEmpty)
+            FadeInUp(delay: const Duration(milliseconds: 250), child: _stickerCard(context, isDark)),
+
+          const SizedBox(height: 20),
+          FadeInUp(delay: const Duration(milliseconds: 300), child: Text(lang.t('quick_actions'), style: GoogleFonts.spaceGrotesk(fontSize: 20, fontWeight: FontWeight.w600))),
+          const SizedBox(height: 16),
+          FadeInUp(delay: const Duration(milliseconds: 400), child: Row(children: [
+            Expanded(child: qr.hasActiveSubscription
+                ? _act(context, Icons.design_services_rounded, lang.t('design_qr'), 'New sticker design', '/design-qr-templates', AppColors.accent)
+                : _act(context, Icons.qr_code_2_rounded, lang.t('order_qr'), lang.t('get_safety_qr'), '/order-qr', AppColors.accent)),
+            const SizedBox(width: 12),
+            Expanded(child: _act(context, Icons.emergency_rounded, lang.t('emergency'), lang.t('manage_contacts'), '/emergency-contacts', AppColors.danger)),
+          ])),
+          const SizedBox(height: 12),
+          FadeInUp(delay: const Duration(milliseconds: 500), child: Row(children: [
+            Expanded(child: _act(context, Icons.local_offer_rounded, lang.t('my_tags'), '${qr.tagDesigns.length} design(s)', '/tag-details', AppColors.success)),
+            const SizedBox(width: 12),
+            Expanded(child: _act(context, Icons.headset_mic_rounded, lang.t('help_support'), 'Get help', '/help-support', AppColors.info)),
+          ])),
+          const SizedBox(height: 28),
+          FadeInUp(delay: const Duration(milliseconds: 600), child: Text(lang.t('recent_activity'), style: GoogleFonts.spaceGrotesk(fontSize: 20, fontWeight: FontWeight.w600))),
+          const SizedBox(height: 16),
+          FadeInUp(delay: const Duration(milliseconds: 700), child: _activity(isDark)),
+          const SizedBox(height: 40),
+        ])),
+    ));
   }
 
   Widget _qrCard(BuildContext context, QRProvider qr, LanguageProvider lang) {
-    final hasActive = qr.hasActiveQR;
-    final activeCount = qr.activeQRCount;
-
+    final active = qr.hasActiveSubscription;
     return Container(width: double.infinity, padding: const EdgeInsets.all(24), decoration: BoxDecoration(
-      gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
-          colors: hasActive ? [const Color(0xFF1B3A4B), const Color(0xFF1B2838)] : [const Color(0xFF2D4059), const Color(0xFF1B2838)]),
-      borderRadius: BorderRadius.circular(20),
-      boxShadow: [BoxShadow(color: const Color(0xFF1B2838).withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 8))]),
+        gradient: LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight,
+            colors: active ? [const Color(0xFF1B3A4B), const Color(0xFF1B2838)] : [const Color(0xFF2D4059), const Color(0xFF1B2838)]),
+        borderRadius: BorderRadius.circular(20), boxShadow: [BoxShadow(color: const Color(0xFF1B2838).withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 8))]),
       child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
         Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
           Text(lang.t('qr_status'), style: GoogleFonts.poppins(fontSize: 14, color: Colors.white.withOpacity(0.7))),
           Container(padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6), decoration: BoxDecoration(
-              color: hasActive ? AppColors.success.withOpacity(0.2) : AppColors.warning.withOpacity(0.2), borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: hasActive ? AppColors.success.withOpacity(0.4) : AppColors.warning.withOpacity(0.4))),
-              child: Row(mainAxisSize: MainAxisSize.min, children: [
-                Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: hasActive ? AppColors.success : AppColors.warning)),
-                const SizedBox(width: 8),
-                Text(hasActive ? lang.t('active') : lang.t('inactive'), style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: hasActive ? AppColors.success : AppColors.warning)),
-              ])),
+              color: active ? AppColors.success.withOpacity(0.2) : AppColors.warning.withOpacity(0.2), borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: active ? AppColors.success.withOpacity(0.4) : AppColors.warning.withOpacity(0.4))),
+              child: Row(mainAxisSize: MainAxisSize.min, children: [Container(width: 8, height: 8, decoration: BoxDecoration(shape: BoxShape.circle, color: active ? AppColors.success : AppColors.warning)), const SizedBox(width: 8),
+                Text(active ? lang.t('active') : lang.t('inactive'), style: GoogleFonts.poppins(fontSize: 13, fontWeight: FontWeight.w600, color: active ? AppColors.success : AppColors.warning))])),
         ]),
         const SizedBox(height: 20),
         Row(children: [
-          Container(width: 60, height: 60, decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: Colors.white.withOpacity(0.1)),
-              child: const Icon(Icons.qr_code_2_rounded, size: 32, color: Colors.white)),
+          Container(width: 60, height: 60, decoration: BoxDecoration(borderRadius: BorderRadius.circular(16), color: Colors.white.withOpacity(0.1)), child: const Icon(Icons.qr_code_2_rounded, size: 32, color: Colors.white)),
           const SizedBox(width: 16),
           Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(hasActive ? '$activeCount QR Code(s) Active' : lang.t('no_active_qr'),
-                style: GoogleFonts.spaceGrotesk(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
+            Text(active ? '${qr.tagDesigns.length} Tag Design(s)' : lang.t('no_active_qr'), style: GoogleFonts.spaceGrotesk(fontSize: 20, fontWeight: FontWeight.w700, color: Colors.white)),
             const SizedBox(height: 4),
-            Text(hasActive ? lang.t('belongings_protected') : lang.t('generate_to_start'),
-                style: GoogleFonts.poppins(fontSize: 13, color: Colors.white.withOpacity(0.6))),
+            Text(active ? '${lang.t('belongings_protected')}  •  ${qr.scansCount} scan(s)' : lang.t('generate_to_start'), style: GoogleFonts.poppins(fontSize: 13, color: Colors.white.withOpacity(0.6))),
           ])),
         ]),
-        // Show "Generate First QR" only when no QR exists at all
-        if (!hasActive && qr.qrCodes.isEmpty) ...[
-          const SizedBox(height: 20),
-          SizedBox(width: double.infinity, child: ElevatedButton(
-            onPressed: () => Navigator.pushNamed(context, '/order-qr'),
-            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-            child: Text(lang.t('generate_first_qr'), style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white)))),
-        ],
-        // Show "Design QR" when QR exists but might need re-design
-        if (hasActive) ...[
-          const SizedBox(height: 20),
-          SizedBox(width: double.infinity, child: OutlinedButton.icon(
-            onPressed: () => Navigator.pushNamed(context, '/design-qr-entry'),
+        const SizedBox(height: 20),
+        if (!active)
+          SizedBox(width: double.infinity, child: ElevatedButton(onPressed: () => Navigator.pushNamed(context, '/design-qr-templates'),
+            style: ElevatedButton.styleFrom(backgroundColor: AppColors.accent, padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            child: Text(lang.t('generate_first_qr'), style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600, color: Colors.white))))
+        else
+          SizedBox(width: double.infinity, child: OutlinedButton.icon(onPressed: () => Navigator.pushNamed(context, '/design-qr-templates'),
             icon: const Icon(Icons.brush_rounded, size: 20, color: Colors.white),
-            label: Text('Re-design for another item', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
-            style: OutlinedButton.styleFrom(side: BorderSide(color: Colors.white.withOpacity(0.3)),
-                padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
-          )),
-        ],
-      ]),
+            label: Text('Design a new sticker', style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600, color: Colors.white)),
+            style: OutlinedButton.styleFrom(side: BorderSide(color: Colors.white.withOpacity(0.3)), padding: const EdgeInsets.symmetric(vertical: 14), shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))))),
+      ]));
+  }
+
+  Widget _stickerCard(BuildContext context, bool isDark) {
+    return GestureDetector(
+      onTap: () => Navigator.pushNamed(context, '/order-sticker'),
+      child: Container(width: double.infinity, padding: const EdgeInsets.all(18), decoration: BoxDecoration(
+          color: isDark ? AppColors.darkCard : AppColors.lightCard, borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: AppColors.accent.withOpacity(0.3)),
+          boxShadow: [BoxShadow(color: AppColors.accent.withOpacity(0.08), blurRadius: 12)]),
+        child: Row(children: [
+          Container(width: 52, height: 52, decoration: BoxDecoration(borderRadius: BorderRadius.circular(14), color: AppColors.accent.withOpacity(0.1)),
+              child: const Icon(Icons.local_shipping_rounded, color: AppColors.accent, size: 26)),
+          const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Order Offline Stickers', style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600)),
+            Text('Get physical waterproof stickers delivered', style: GoogleFonts.poppins(fontSize: 12, color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)),
+          ])),
+          Container(padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4), decoration: BoxDecoration(color: AppColors.accent.withOpacity(0.1), borderRadius: BorderRadius.circular(8)),
+              child: Text('\u20B999/ea', style: GoogleFonts.poppins(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.accent))),
+        ])),
     );
   }
 
   Widget _act(BuildContext ctx, IconData icon, String title, String sub, String route, Color color) {
     final isDark = Theme.of(ctx).brightness == Brightness.dark;
     return GestureDetector(onTap: () => Navigator.pushNamed(ctx, route), child: Container(padding: const EdgeInsets.all(18),
-        decoration: BoxDecoration(color: isDark ? AppColors.darkCard : AppColors.lightCard, borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: isDark ? AppColors.darkDivider : AppColors.lightDivider)),
+        decoration: BoxDecoration(color: isDark ? AppColors.darkCard : AppColors.lightCard, borderRadius: BorderRadius.circular(16), border: Border.all(color: isDark ? AppColors.darkDivider : AppColors.lightDivider)),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Container(width: 44, height: 44, decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: color.withOpacity(0.1)), child: Icon(icon, color: color, size: 22)),
-          const SizedBox(height: 14),
-          Text(title, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600)),
-          const SizedBox(height: 2),
-          Text(sub, style: GoogleFonts.poppins(fontSize: 12, color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)),
+          const SizedBox(height: 14), Text(title, style: GoogleFonts.poppins(fontSize: 15, fontWeight: FontWeight.w600)),
+          const SizedBox(height: 2), Text(sub, style: GoogleFonts.poppins(fontSize: 12, color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)),
         ])));
   }
 
@@ -195,16 +162,9 @@ class _DashboardScreenState extends State<DashboardScreen> {
       {'icon': Icons.chat_bubble_outline, 'title': 'New Message', 'sub': 'Stranger sent a message', 'time': '2 days', 'color': AppColors.accent},
     ];
     return Column(children: items.map((a) => Container(margin: const EdgeInsets.only(bottom: 12), padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(color: isDark ? AppColors.darkCard : AppColors.lightCard, borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: isDark ? AppColors.darkDivider : AppColors.lightDivider)),
-        child: Row(children: [
-          Container(width: 44, height: 44, decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: (a['color'] as Color).withOpacity(0.1)),
-              child: Icon(a['icon'] as IconData, color: a['color'] as Color, size: 22)),
-          const SizedBox(width: 14),
-          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text(a['title'] as String, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600)),
-            Text(a['sub'] as String, style: GoogleFonts.poppins(fontSize: 12, color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)),
-          ])),
+        decoration: BoxDecoration(color: isDark ? AppColors.darkCard : AppColors.lightCard, borderRadius: BorderRadius.circular(14), border: Border.all(color: isDark ? AppColors.darkDivider : AppColors.lightDivider)),
+        child: Row(children: [Container(width: 44, height: 44, decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: (a['color'] as Color).withOpacity(0.1)), child: Icon(a['icon'] as IconData, color: a['color'] as Color, size: 22)), const SizedBox(width: 14),
+          Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [Text(a['title'] as String, style: GoogleFonts.poppins(fontSize: 14, fontWeight: FontWeight.w600)), Text(a['sub'] as String, style: GoogleFonts.poppins(fontSize: 12, color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary))])),
           Text(a['time'] as String, style: GoogleFonts.poppins(fontSize: 11, color: isDark ? AppColors.darkTextSecondary : AppColors.lightTextSecondary)),
         ]))).toList());
   }
